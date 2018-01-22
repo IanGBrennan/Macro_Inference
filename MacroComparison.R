@@ -471,6 +471,79 @@ ggplot(all.shifts.list, aes(x=shift.positions.list, y=Freq, fill=method)) +
 
 
 
+###################################################################################
+# One more thing we might want to show is the branch length difference among trees
+## we can try to do this by plotting pairwise distances to show inherent bias
+###################################################################################
+# start by rescaling the trees to height 1
+as <- lapply(astralbeast, rescale, "depth", 1); sb <- lapply(starbeast, rescale, "depth", 1)
+class(as) <- "multiPhylo"; class(sb) <- "multiPhylo"
+# now a loop to compare tree1/method1 to tree1/method2 via pairwise distances
+total.dff <- NULL # make an empty object to store all distances (ntips! x ntrees)
+for (k in 1:length(starbeast)) {
+  dff <- NULL
+  in1 <- sb[[k]] # designate tree.n/method.n
+  in2 <- as[[k]] # designate tree.n/method.n+1
+  
+  inboth <- intersect(in1$tip.label, in2$tip.label) # check all the tips that match between trees
+  
+  # Get the pairwise distance matrices
+  pw.in1 <- cophenetic.phylo(in1)
+  pw.in2 <- cophenetic.phylo(in2)
+  
+  # now: compare pairwise distances from these 2 trees
+  #   the complication is that they have different sets of taxa
+  
+  # Get unique combinations of this set:
+  ucomb <-  combn(inboth, m = 2)
+  
+  # make vectors to hold results
+  dist_1 <- rep(NA, ncol(ucomb))
+  dist_2 <- rep(NA, ncol(ucomb))
+  
+  dff <- data.frame(species1 = ucomb[1,], species2 = ucomb[2,] , dist_1, dist_2, stringsAsFactors=F)
+  
+  # fill in the blanks....
+  
+  for (ii in 1:nrow(dff)){
+    dff$dist_1[ii] <- pw.in1[ dff$species1[ii], dff$species2[ii] ]
+    dff$dist_2[ii] <- pw.in2[ dff$species1[ii], dff$species2[ii] ]  
+  }
+  total.dff <- rbind.data.frame(total.dff, dff)
+}
+
+fit <- lm(dist_1 ~ dist_2, data=total.dff) # change this according to the parameter you simulated
+plot.fit <- (ggplotRegression(fit))
+plot.fit + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                 panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+#######################################################################################
+# Interlude: the base 'plot' and 'abline' functions are alright, but we want to 
+## make it (1) prettier, and (2) include the information from our linear regression
+### into the plot, so that we know what our results were. Use custom 'ggplotRegression'
+### if you want to change the saturation use 'alpha'
+ggplotRegression <- function (fit) {
+  require(ggplot2)
+  
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+    geom_point(alpha=0.25, color="red") + # change to 0.25 and "red" for time plots
+    stat_smooth(method = "lm", col = "black") + # change to "black" for time plots
+    labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                       "Intercept =",signif(fit$coef[[1]],5 ),
+                       " Slope =",signif(fit$coef[[2]], 5),
+                       " P =",signif(summary(fit)$coef[2,4], 5)))
+}
+#######################################################################################
+
+
+
+
+
+
+
+
+
+
 
 
 wd = "/Users/Ian/Google.Drive/ANU Herp Work/Lemmon Projects/T222_Elapidae/Elapid_macroevolution/Protea_Files/"
