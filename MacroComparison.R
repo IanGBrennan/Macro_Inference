@@ -38,11 +38,12 @@ library(wesanderson); library(ggthemes)
 ## (all in "/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Final_Trees/")
 # or ("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/"):
   # Marsupials
-      # RAxML concatenated = 
-      # ASTRAL w/RAxML gene trees = "Marsupials_ASTRAL_RAxML.trees"
+      # RAxML concatenated = "Marsupials.RAxML.Concat.trees"
+          # phylo regressed traits = "Marsupials.RAxML.Concat.PhyloResiduals.rds"
+      # ASTRAL w/RAxML gene trees = "Marsupials.ASTRAL.RAxML.trees"
+          # phylo regressed traits = "Marsupials.Astral.RAxML.PhyloResiduals.rds"
       # starBEAST = 
       # ASTRAL w/starBEAST gene trees =
-      # phylogenetically regressed traits (for l1ou) = "Marsupials.PhyloResiduals.rds"
   # Elapids
       # RAxML concatenated = "T222_concatenated_Ingroup.trimmed.trees"
           # phylo regressed traits = "Elapids.Concat.RAxML.PhyloResiduals.rds"
@@ -64,41 +65,26 @@ library(wesanderson); library(ggthemes)
 
 # Just a staging area for TREEs:
 #################################
-trees = read.nexus("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Raw_Trees/Marsupials_ASTRAL_RAxML.tre") #pick out our set of posterior trees
+trees = read.nexus("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Final_Trees/Marsupials.ASTRAL.RAxML.trees") #pick out our set of posterior trees
 #################################
 
 
 # Quickly standardize the data to body size
 #######################################################################
-# regress (log transformed) Tail Length against SVL, extract residuals
-length.weight <- lm(logWeight ~ logLength, data=mardata)
-length.weight <- lm(M.avgWT ~ M.avgBL, data=mardata)
-#plot(length.weight)
-nonlogweight_res <- resid(length.weight)
-mardata <- cbind(mardata, nonlogweight_res)
-
-# regress (log transformed) Head Length against SVL, extract residuals
-length.brain <- lm(logBrain ~ logLength, data=mardata)
-length.brain <- lm(Brain.size ~ M.avgBL, data=mardata)
-#plot(svl.headl)
-nonlogbrain_res <- resid(length.brain)
-mardata <- cbind(mardata, nonlogbrain_res)
-
-write.csv(mardata, file="/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.residuals.data.csv")
-
 #### I've decided to use a phylogenetic regression instead of a standard linear regression, 
 ##### the steps for running it for each tree are looped below
 datum <- read.csv("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.RAW.csv", header=T, row.names=1)
-datum <- log(datum) # quickly log the raw values
+datum <- log(datum) # quickly log the raw values (if not already done!)
 total.data <- NULL # create a frame for holding all our residuals
+against <- datum$M.avgBL; names(against) <- rownames(datum) # phyl.resid needs names to determine proper order
 for (b in 1:length(trees)) {
   resid.data <- NULL # temporary object
-  resids <- phyl.resid(trees[[b]], datum$M.avgBL, datum[,c("Brain.size", "M.avgWT")]) # regress brain size and weight against body length
-  resid.data <- cbind(resid.data, datum$M.avgBL); resid.data <- cbind(resid.data, resids$resid)
-  colnames(resid.data) <- c("BodyLength", "BrainSize", "Weight")
+  resids <- phyl.resid(trees[[b]], against, datum[,c("Brain.size", "M.avgWT")]) # regress brain size and weight against body length
+  resid.data <- cbind(resid.data, resids$resid); resid.data <- cbind(resid.data, against); 
+  colnames(resid.data) <- c("BrainSize", "Weight", "BodyLength")
   total.data[[b]] <- resid.data
 }
-saveRDS(total.data, "/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.PhyloResiduals.rds")
+saveRDS(total.data, "/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.ASTRAL.RAxML.PhyloResiduals.rds")
 
 # You'll want to go through these steps each time you start again
 trait.data <- read.csv("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.residuals.data.csv")
@@ -121,9 +107,10 @@ trees = astral.raxml
 
 # Add on the Thylacine next to Myrmecobius at a reasonable depth
 depths <- seq(0.3,0.9, 0.01)
+out.trees <- NULL
 for (k in 1:length(trees)){
   at.depth <- sample(depths, 1)
-  trees[[k]] <- bind.tip(trees[[k]], where=which(trees[[k]]$tip.label=="Myrmecobiidae_Myrmecobius_fasciatus"),
+  out.trees[[k]] <- bind.tip(trees[[k]], where=which(trees[[k]]$tip.label=="Myrmecobiidae_Myrmecobius_fasciatus"),
                          tip.label="Thylacinidae_Thylacinus_cynocephalus", 
                          position=at.depth*trees[[k]]$edge.length[which(trees[[k]]$edge[,2]==which(trees[[k]]$tip.label=="Myrmecobiidae_Myrmecobius_fasciatus"))])
 }
@@ -301,7 +288,7 @@ logbrain_res <- log(trait.data[,"nonlogbrain_res"])
 name.check(trees[[23]], trait.data[[23]]);
 
 #### Adjust the data and tree to fit (order matters in l1ou!)
-data <- adjust_data(trees[[99]], trait.data[[99]]) # exclude your PC1 values from above!
+data <- adjust_data(trees[[16]], trait.data[[16]]) # exclude your PC1 values from above!
 
 
 #### Estimate the number and position of shifts a priori 
@@ -357,13 +344,13 @@ getDescendants.edges<-function(tree,edge,curr=NULL){
 # *note, edge indices are rearranged in the 'adjust_data' function,
 # so to get the proper edge index, call from data$tree
 no.shifts <- NULL
-shift.positions.by.tree <- NULL
+shift.positions.by.tree <- list()
 shift.positions.list <- NULL
 l1ou.res <- NULL
 
 # before you hit enter, make sure to change the names of the output files below!
 
-for (i in 20:length(trees)) {
+for (i in 1:length(trees)) {
   cat("iteration", i, "of", length(trees), "\n") #keep track of what tree/loop# we're on
   
   #### Adjust the data and tree to fit (order matters in l1ou!)
@@ -384,23 +371,26 @@ for (i in 20:length(trees)) {
   shift.edges <- shift.fit$shift.configuration
   # match it to tips
   all.shifted.tips <- NULL
-  for (t in 1:length(shift.edges)) {
-    names <- getDescendants.edges(data$tree, shift.edges[[t]])
-    all.shifted.tips <- append(all.shifted.tips, names)
+  if (length(shift.edges) == 0) {
+    all.shifted.tips <- "no shifts"
+  } else for (t in 1:length(shift.edges)) {
+              names <- getDescendants.edges(data$tree, shift.edges[[t]])
+              all.shifted.tips <- append(all.shifted.tips, names)
   }
   shift.positions.list <- append(shift.positions.list, all.shifted.tips)
   shift.positions.by.tree[[i]] <- all.shifted.tips
   
-  save(no.shifts,               file="Marsupials.ASTRAL.RAxML.num.shifts.RData")
-  save(shift.positions.list,    file="Marsupials.ASTRAL.RAxML.list.shift.positions.RData")
-  save(shift.positions.by.tree, file="Marsupials.ASTRAL.RAxML.shift.positions.by.tree.RData")
-  save(l1ou.res,                file="Marsupials.ASTRAL.RAxML.Results.RData")
+  saveRDS(no.shifts,               file="/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/l1ou_Output/Marsupials.ASTRAL.RAxML.num.shifts.RDS")
+  saveRDS(shift.positions.list,    file="/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/l1ou_Output/Marsupials.ASTRAL.RAxML.list.shift.positions.RDS")
+  saveRDS(shift.positions.by.tree, file="/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/l1ou_Output/Marsupials.ASTRAL.RAxML.shift.positions.by.tree.RDS")
+  saveRDS(l1ou.res,                file="/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/l1ou_Output/Marsupials.ASTRAL.RAxML.Results.RDS")
 }
 colnames(no.shifts) <- c("tree.no", "n.shifts")
 
 # add.lengths to appropriate edges of the tree
 res.counts <- table(shift.positions.list) # make a table of the shift frequencies
 shifted.tips <- as.data.frame(res.counts) # turn it into a data frame
+# shifted.tips <- shifted.tips[1,] # remove any labelled "no shifts"
 all.node.numbers <- as.data.frame(trees[[1]]$tip.label) # get all the nodes of the tree and the numbers, the tree must match the one you want to plot!
 all.node.numbers[,"tip.no"] <- rownames(all.node.numbers); colnames(all.node.numbers) <- c("tip.name", "tip.no") # make a column that shows the tip number
 target.numbers <-  all.node.numbers[all.node.numbers$tip.name %in% shifted.tips$shift.positions.list,] # subset all the tips, so show just the node numbers of the shifted tips
@@ -429,10 +419,6 @@ chosen.shift$tree <- tree # set the tree in the 'shift.fit' object to our rescal
 # if you get 'figure margins' error, do: par(mar=c(1,1,1,1))
 plot(chosen.shift, cex=1)
 
-test <- l1ou.res[[60]]
-plot(test, cex=1)
-test$tree <- tree
-plot(test)
 
 #####################
 ## I've now saved the l1ou output as it's own object "l1ou.res", so we should be able to 
@@ -480,10 +466,11 @@ as <- lapply(astralbeast, rescale, "depth", 1); sb <- lapply(starbeast, rescale,
 class(as) <- "multiPhylo"; class(sb) <- "multiPhylo"
 # now a loop to compare tree1/method1 to tree1/method2 via pairwise distances
 total.dff <- NULL # make an empty object to store all distances (ntips! x ntrees)
+method1 <- starbeast; method2 <- astralbeast
 for (k in 1:length(starbeast)) {
   dff <- NULL
-  in1 <- sb[[k]] # designate tree.n/method.n
-  in2 <- as[[k]] # designate tree.n/method.n+1
+  in1 <- method1[[k]] # designate tree.n/method.n
+  in2 <- method2[[k]] # designate tree.n/method.n+1
   
   inboth <- intersect(in1$tip.label, in2$tip.label) # check all the tips that match between trees
   
@@ -560,3 +547,42 @@ for (i in 1:length(trees)){
 
 butt <- load(file="Protea.ASTRAL.RAxML.list.shift.positions.RData")
 View(butt)
+
+
+
+
+
+# Quickly standardize the data to body size
+#######################################################################
+# regress (log transformed) Tail Length against SVL, extract residuals
+length.weight <- lm(logWeight ~ logLength, data=datum)
+length.weight <- lm(M.avgWT ~ M.avgBL, data=datum)
+#plot(length.weight)
+nonlogweight_res <- resid(length.weight)
+mardata <- cbind(mardata, nonlogweight_res)
+
+# regress (log transformed) Head Length against SVL, extract residuals
+length.brain <- lm(logBrain ~ logLength, data=mardata)
+length.brain <- lm(Brain.size ~ M.avgBL, data=datum)
+#plot(length.brain)
+nonlogbrain_res <- resid(length.brain)
+mardata <- cbind(mardata, nonlogbrain_res)
+
+datum <- read.csv("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.RAW.csv", header=T, row.names=1)
+datum <- log(datum) # quickly log the raw values (if not already done!)
+total.data <- NULL # create a frame for holding all our residuals
+against <- datum$M.avgBL; names(against) <- rownames(datum) # phyl.resid needs names to determine proper order
+for (b in 1:length(trees)) {
+  resid.data <- NULL # temporary object
+  resids <- phyl.resid(trees[[b]], datum$M.avgBL, datum[,c("Brain.size", "M.avgWT")]) # regress brain size and weight against body length
+  resid.data <- cbind(resid.data, datum$M.avgBL); resid.data <- cbind(resid.data, resids$resid)
+  colnames(resid.data) <- c("BodyLength", "BrainSize", "Weight")
+  total.data[[b]] <- resid.data
+}
+saveRDS(total.data, "/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.RAxML.Concat.PhyloResiduals.rds")
+
+butt <- readRDS("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.Astral.RAxML.PhyloResiduals.rds")
+trees = read.tree("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Final_Trees/Marsupials.ASTRAL.RAxML.trees") #pick out our set of posterior trees
+test <- phyl.resid(trees[[1]], against, datum[,c("Brain.size", "M.avgWT")])
+test
+butt[[1]]

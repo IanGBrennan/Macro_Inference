@@ -10,7 +10,7 @@ Dasyuridae_Dasyurus_geffroii,5.17,355,1447.5
 Dasyuridae_Dasyurus_maculatus,9.41,569.5,3250
 Didelphidae_Didelphis_virginiana,6.72,500,2600
 Acrobatidae_Distoechurus_pennatus,1.22,115,51.5
-Macropodidae_Dorcopsulus_vanheurni,6.7,490,4000
+Macropodidae_Dorcopsulus_vanheurni,16.4,490,3250
 Microbiotheriidae_Dromiciops_gliroides,0.81,94,37
 Peramelidae_Echymipera_kalubu,3.73,360,1325
 Hypsiprymnodontidae_Hypsiprymnodon_moschatus,4.13,213,520
@@ -20,7 +20,7 @@ Thylacomyidae_Macrotis_lagotis,6.57,425,1750
 Marmosidae_Monodelphis_domestica,1.8,150,155
 Myrmecobiidae_Myrmecobius_fasciatus,4.25,256,578.5
 Notoryctidae_Notoryctes_typhlops,0.78,92,55
-Macropodidae_Onychogalea_fraenata,14.7,605,6500
+Macropodidae_Onychogalea_fraenata,14.7,525,4952
 Peramelidae_Perameles_gunnii,4.5,310,800
 Peramelidae_Perameles_nasuta,4.96,377.5,925
 Peramelidae_Peroryctes_raffrayana,4.01,346,838
@@ -28,7 +28,7 @@ Pseudochiridae_Petauroides_volans,4.69,410,1300
 Phalangeridae_Phalanger_carmelitae,8.9,375,1850
 Phalangeridae_Phalanger_orientalis,9.22,424,1850
 Dasyuridae_Phascogale_calura,0.91,113.5,53.5
-Dasyuridae_Phascogale_tapoatafa,1.81,210.5,253
+Dasyuridae_Phascogale_tapoatafa,1.81,210.5,193.5
 Phascolarctidae_Phascolarctos_cinereus,20.2,785,12200
 Dasyuridae_Planigale_tenuirostris,0.2,70,12.75
 Potoroidae_Potorous_tridactylus_north,9.53,348.5,1190
