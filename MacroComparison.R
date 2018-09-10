@@ -32,6 +32,12 @@ library(ggbiplot);library(ggplot2);library(ggtree); library(ggridges)
 library(l1ou)
 library(Rmisc)
 library(wesanderson); library(ggthemes)
+library(corrplot)
+
+source("/Users/Ian/Google.Drive/R.Analyses/Convenient Scripts/l1ou.Uncertainty.R")
+source("/Users/Ian/Google.Drive/R.Analyses/Convenient Scripts/Get.Descendant.Edges.R")
+source("/Users/Ian/Google.Drive/R.Analyses/Convenient Scripts/star.tree_Make_Polytomies.R")
+
 
 # A list of the final sets of trees/data we're using in this study 
 #############################################################
@@ -61,11 +67,13 @@ library(wesanderson); library(ggthemes)
       # ASTRAL w/starBEAST gene trees = "Protea.ASTRAL.starBEAST.TRIMMED.SCALED.trees"
       # phylogenetically regressed traits (for l1ou) = 
   # Cichlids
+      # RAxML concatenated = 
+      # ASTRAL w/RAxML gene trees = "Cichlids.ASTRAL.RAxML.trees"
 
 
 # Just a staging area for TREEs:
 #################################
-trees = read.nexus("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Final_Trees/Marsupials.ASTRAL.RAxML.trees") #pick out our set of posterior trees
+trees = read.tree("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Final_Trees/Cichlids.ASTRAL.RAxML.trees") #pick out our set of posterior trees
 #################################
 
 
@@ -73,18 +81,54 @@ trees = read.nexus("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Final_Tre
 #######################################################################
 #### I've decided to use a phylogenetic regression instead of a standard linear regression, 
 ##### the steps for running it for each tree are looped below
-datum <- read.csv("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.RAW.csv", header=T, row.names=1)
+datum <- read.csv("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Cichlids.RAW.csv", header=T, row.names=1)
 datum <- log(datum) # quickly log the raw values (if not already done!)
 total.data <- NULL # create a frame for holding all our residuals
-against <- datum$M.avgBL; names(against) <- rownames(datum) # phyl.resid needs names to determine proper order
+against <- datum$Body_Mass; names(against) <- rownames(datum) # phyl.resid needs names to determine proper order
 for (b in 1:length(trees)) {
   resid.data <- NULL # temporary object
-  resids <- phyl.resid(trees[[b]], against, datum[,c("Brain.size", "M.avgWT")]) # regress brain size and weight against body length
-  resid.data <- cbind(resid.data, resids$resid); resid.data <- cbind(resid.data, against); 
-  colnames(resid.data) <- c("BrainSize", "Weight", "BodyLength")
+  #resids <- phyl.resid(trees[[b]], against, datum[,c("Brain.size", "M.avgWT")]) # regress brain size and weight against body length
+  resids <- phyl.resid(trees[[b]], against, datum[,2:5]) # regress brain size and weight against body length
+  residual.data <- resids$resid[order(rownames(resids$resid)),] # order the data to match what we regressed it against
+  resid.data <- cbind(resid.data, residual.data); 
+    Body_Mass <- against; Body_Mass <- as.data.frame(Body_Mass); resid.data <- cbind(Body_Mass, resid.data); 
+  colnames(resid.data) <- colnames(datum)[1:5]
   total.data[[b]] <- resid.data
 }
-saveRDS(total.data, "/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.ASTRAL.RAxML.PhyloResiduals.rds")
+saveRDS(total.data, "/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Cichlids.ASTRAL.RAxML.PhyloResiduals.rds")
+
+
+
+
+compare.traits <- function(data, trait1, trait2){
+  xaxis <- colnames(data[trait1])
+  yaxis <- colnames(data[trait2])
+  fit <- lm(data[,trait1]~data[,trait2])
+  (ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1]))
+   + geom_point(alpha=0.5, color="red")
+   + geom_smooth(method="lm", color="black")
+   + theme_classic()
+   + labs(x=xaxis, y=yaxis,
+          title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                  "Intercept =",signif(fit$coef[[1]],5 ),
+                  " Slope =",signif(fit$coef[[2]], 5),
+                  " P =",signif(summary(fit)$coef[2,4], 5))))
+}
+compare.traits(datum, 1, 2)
+
+test.cor <- cor(datum, method="pearson", use = "complete.obs")
+res1 <- cor.mtest(datum, conf.level = .95)
+corrplot(test.cor, method="circle", type="lower", order="alphabet",
+         addgrid.col=NA, tl.col="black", title="unburnt continuous",
+         tl.cex=0.5, p.mat = res1$p, insig = "label_sig", pch.col = "white")
+# more corrplot info at: https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html
+
+
+
+concat <- (ggplot(mdi.estimates, aes(x=MDI)) 
+           + geom_density(fill="green")
+           + scale_x_continuous(limits = c(0, 1))
+           + theme_classic())
 
 # You'll want to go through these steps each time you start again
 trait.data <- read.csv("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.residuals.data.csv")
@@ -94,7 +138,8 @@ trait.data <- trait.data[,c("Name_in_Duchene", "logLength", "brain_res", "weight
 trait.data <- trait.data[,c("Name_in_Duchene", "logLength", "nonlogbrain_res", "nonlogweight_res")]
 rownames(trait.data) <- trait.data$Name_in_Duchene
 # or
-trait.data <- readRDS("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Marsupials.PhyloResiduals.rds")
+trait.data <- readRDS("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Cichlids.ASTRAL.RAxML.PhyloResiduals.rds")
+trait.data <- read.csv("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Trait_Data/Cichlids.RAW.csv", header=T, row.names=1)
 
 
 # Read in the trees we'll use:
@@ -278,11 +323,29 @@ colnames(mardata) <- c("Name_in_Duchene", "Brain.size", "M.avgBL", "M.avgWT",
 trait.data
 logbrain_res <- log(trait.data[,"nonlogbrain_res"])
 
+
+
+
 ########################################################
 # Now we can start looking at shifts in size and shape
 ## using 'l1ou' we'll estimate morphological shifts
 ## then attempt to identify instances of convergence
 ########################################################
+
+output.est <- estimate.uncertainty(trees, trait.data, n.iter=2, estimate.convergence=F)
+output.post <- process.uncertainty(output.est, 2)
+# if you get 'figure margins' error, do: par(mar=c(1,1,1,1))
+plot(output.post)
+
+test1 <- star.tree(trees[[1]])
+test2 <- star.tree(trees[[2]])
+testies <- c(test1, test2)
+output.testie <- estimate.uncertainty(testies, trait.data, n.iter=2, estimate.convergence=F)
+output.postie <- process.uncertainty(output.testie, 2)
+# if you get 'figure margins' error, do: par(mar=c(1,1,1,1))
+plot(output.postie)
+
+
 
 #### Check to make sure the tips match the data labels
 name.check(trees[[23]], trait.data[[23]]);
@@ -301,43 +364,7 @@ fit.conv <- estimate_convergent_regimes(shift.fit, nCores=8, criterion="pBIC")
 plot(fit.conv, cex=0.5)
 
 
-## This quick function pulls out the descendant tips from and edge number
-#########################################################################
-getDescendants.edges<-function(tree,edge,curr=NULL){
-  names <- NULL
-  if(is.null(curr)) curr<-vector()
-  node.below <- tree$edge[edge,2]
-  if(node.below <= Ntip(tree)) {
-    input <- tree$tip.label[[node.below]]
-    names <- append(names, input)
-  }
-  else {
-    daughters<-tree$edge[which(tree$edge[,1]==node.below),2]
-    curr<-c(curr,daughters)
-    z<-which(daughters<=length(tree$tip))
-    if(length(z)==2) for(i in 1:length(z)) {
-      input <- tree$tip.label[[curr[[i]]]]
-      names <- append(names, input)
-    }
-    if(length(z)==1) {
-      target <- daughters[[z]]
-      input <- tree$tip.label[[target]]
-      names <- append(names, input)
-    }
-    w<-which(daughters>=length(tree$tip))
-    if(length(w)>0) for(i in 1:length(w)) 
-      curr<-getDescendants(tree,daughters[w[1]],curr)
-    curr<-unique(curr)
-    curr<-subset(curr, curr<=Ntip(tree))
-    for (q in 1:length(curr)) {
-      input <- tree$tip.label[[curr[[q]]]]
-      names <- append(names, input)
-    }
-  }
-  names <- unique(names)
-  return(names)
-}
-#########################################################################
+
 
 ## Let's try building a loop to make sense of the shifts
 ########################################################
@@ -586,3 +613,20 @@ trees = read.tree("/Users/Ian/Google.Drive/R.Analyses/Macro_Inference/Final_Tree
 test <- phyl.resid(trees[[1]], against, datum[,c("Brain.size", "M.avgWT")])
 test
 butt[[1]]
+
+
+
+trait.data <- t(total.data[[1]]) # transpose the data (taxa as columns, traits as rows)
+#rownames(morph.data) <- "TL.Trunk" #adjust this to name the trait if you'd like
+#rownames(trait.data) <- c("HL.Trunk", "TL.Trunk", "HW.Trunk") #adjust this to name the trait if you'd like
+
+res<- PhyloEM(phylo=trees[[1]], 
+              Y_data=trait.data,      # read in the trait data         
+              process="scOU",         # identify the process to analyse    
+              #random.root=T,         #    
+              K_max=Ntip(trees[[1]]),               # set a maximum limit on the number of shifts to search
+              check.tips.names=T,     # check to make sure names/trait data match          
+              parallel_alpha=T,       # we want to parallelize the analysis        
+              Ncores=8)               # with how many cores?
+independent=F)          # if using multiple traits, are they independent?   
+plot(res, show.tip.label=T, label_cex=0.1)
